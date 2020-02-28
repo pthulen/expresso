@@ -5,6 +5,8 @@ const sqlite3 = require('sqlite3');
 //loads database and uses Test Database during tests rather than working database
 const db = new sqlite3.Database(process.env.TEST_DATABASE || './database.sqlite');
 
+const menuItemsRouter = require('./menuItems');
+
 //GET all handler for current menu
 menusRouter.get('/', (req, res, next) => {
     db.all('SELECT * FROM Menu', (err, menus) => {
@@ -33,6 +35,8 @@ menusRouter.param('menuId', (req, res, next, menuId) => {
             }
     })
   });  
+
+menusRouter.use('/:menuId/menu-items', menuItemsRouter);
 
   //Handles GET requests by menu id
 menusRouter.get('/:menuId',(req,res, next) => {
@@ -66,5 +70,54 @@ menusRouter.post('/', (req, res, next) => {
     }
     }) 
 });
+
+
+menusRouter.put('/:menuId', (req, res, next) => {
+    const title = req.body.menu.title;
+    if (!title) {
+      return res.sendStatus(400);
+    }
+  
+    const sql = 'UPDATE Menu SET title = $title WHERE Menu.id = $menuId';
+    const values = {
+      $title: title,
+      $menuId: req.params.menuId
+    };
+  
+    db.run(sql, values, (error) => {
+      if (error) {
+        next(error);
+      } else {
+        db.get(`SELECT * FROM Menu WHERE Menu.id = ${req.params.menuId}`,
+          (error, menu) => {
+            res.status(200).json({menu: menu});
+          });
+      }
+    });
+  });
+  
+  menusRouter.delete('/:menuId', (req, res, next) => {
+    const menuItemSql = 'SELECT * FROM MenuItem WHERE MenuItem.menu_id = $menuId';
+    const menuItemValues = {$menuId: req.params.menuId};
+    db.get(menuItemSql, menuItemValues, (error, menuItem) => {
+      if (error) {
+        next(error);
+      } else if (menuItem) {
+        return res.sendStatus(400);
+      } else {
+        const deleteSql = 'DELETE FROM Menu WHERE Menu.id = $menuId';
+        const deleteValues = {$menuId: req.params.menuId};
+  
+        db.run(deleteSql, deleteValues, (error) => {
+          if (error) {
+            next(error);
+          } else {
+            res.sendStatus(204);
+          }
+        });
+  
+      }
+    });
+  });
 
 module.exports = menusRouter;
